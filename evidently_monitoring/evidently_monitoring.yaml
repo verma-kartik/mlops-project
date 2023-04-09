@@ -1,0 +1,16 @@
+name: Evidently Monitoring
+description: Creates and shows various evidenly.ai reports
+
+inputs:
+- {name: Evidently_Data, type: LocalPath, description: 'Path where evidently data is stored.'}
+
+implementation:
+  container:
+    image: docker.io/vermakartik/evi_monitoring:v1
+    command: [
+      python, evidently_monitoring.py,
+      
+      --evidently_data,
+      {intputPath: Evidently_Data}
+
+    ]

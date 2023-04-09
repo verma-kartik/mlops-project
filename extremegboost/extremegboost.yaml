@@ -1,0 +1,23 @@
+name: XGBoost regressor
+description: Trains a  XGBoost regressor
+
+inputs:
+- {name: Data, type: LocalPath, description: 'Path where data is stored.'}
+
+outputs:
+- {name: Evidently_Data, type: LocalPath, description: 'Path where evidently data will be stored.'}
+
+
+implementation:
+  container:
+    image: docker.io/vermakartik/xgboost:v11
+    command: [
+      python, extremegboost.py,
+
+      --data,
+      {inputPath: Data},
+      
+      --evidently_data,
+      {outputPath: Evidently_Data},
+
+    ]
