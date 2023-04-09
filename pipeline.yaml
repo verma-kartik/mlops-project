@@ -3,8 +3,7 @@ kind: Workflow
 metadata:
   generateName: first-pipeline-
   annotations: {pipelines.kubeflow.org/kfp_sdk_version: 1.8.20, pipelines.kubeflow.org/pipeline_compilation_time: '2023-04-09T12:42:15.271867',
-    pipelines.kubeflow.org/pipeline_spec: '{"description": "Applies Decision Tree
-      and Logistic Regression for classification problem.", "name": "First Pipeline"}'}
+    pipelines.kubeflow.org/pipeline_spec: '{ "name": "First Pipeline"}'}
   labels: {pipelines.kubeflow.org/kfp_sdk_version: 1.8.20}
 spec:
   entrypoint: first-pipeline
@@ -22,8 +21,8 @@ spec:
         pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
         pipelines.kubeflow.org/pipeline-sdk-type: kfp
         pipelines.kubeflow.org/enable_caching: "true"
-      annotations: {pipelines.kubeflow.org/component_spec: '{"description": "Download
-          toy data from sklearn datasets", "implementation": {"container": {"command":
+      annotations: {pipelines.kubeflow.org/component_spec: '{"description": "Downloads, preprocess 
+      and splits the dataset.", "implementation": {"container": {"command":
           ["python", "download_data.py", "--data", {"outputPath": "Data"}], "image":
           "docker.io/vermakartik/download_data:v6"}}, "name": "Download Data Function",
           "outputs": [{"description": "Path where data will be stored.", "name": "Data",
