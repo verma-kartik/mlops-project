@@ -1,0 +1,98 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: first-pipeline-
+  annotations: {pipelines.kubeflow.org/kfp_sdk_version: 1.8.20, pipelines.kubeflow.org/pipeline_compilation_time: '2023-04-09T12:42:15.271867',
+    pipelines.kubeflow.org/pipeline_spec: '{"description": "Applies Decision Tree
+      and Logistic Regression for classification problem.", "name": "First Pipeline"}'}
+  labels: {pipelines.kubeflow.org/kfp_sdk_version: 1.8.20}
+spec:
+  entrypoint: first-pipeline
+  templates:
+  - name: download-data-function
+    container:
+      args: []
+      command: [python, download_data.py, --data, /tmp/outputs/Data/data]
+      image: docker.io/vermakartik/download_data:v6
+    outputs:
+      artifacts:
+      - {name: download-data-function-Data, path: /tmp/outputs/Data/data}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+      annotations: {pipelines.kubeflow.org/component_spec: '{"description": "Download
+          toy data from sklearn datasets", "implementation": {"container": {"command":
+          ["python", "download_data.py", "--data", {"outputPath": "Data"}], "image":
+          "docker.io/vermakartik/download_data:v6"}}, "name": "Download Data Function",
+          "outputs": [{"description": "Path where data will be stored.", "name": "Data",
+          "type": "LocalPath"}]}', pipelines.kubeflow.org/component_ref: '{"digest":
+          "c29ee2f6de58b5c128debb0dab0b828a33da7e567df1c3ce5d79901d128b3b18", "url":
+          "./download_data.yaml"}'}
+  - name: evidently-monitoring
+    container:
+      args: []
+      command: [python, evidently_monitoring.py, --evidently_data, /tmp/inputs/Evidently_Data/data]
+      image: docker.io/vermakartik/evi_monitoring:v12
+    inputs:
+      artifacts:
+      - {name: xgboost-regressor-Evidently_Data, path: /tmp/inputs/Evidently_Data/data}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+      annotations: {pipelines.kubeflow.org/component_spec: '{"description": "Creates
+          and shows various evidenly.ai reports", "implementation": {"container":
+          {"command": ["python", "evidently_monitoring.py", "--evidently_data", {"inputPath":
+          "Evidently_Data"}], "image": "docker.io/vermakartik/evi_monitoring:v12"}},
+          "inputs": [{"description": "Path where evidently data is stored.", "name":
+          "Evidently_Data", "type": "LocalPath"}], "name": "Evidently Monitoring"}',
+        pipelines.kubeflow.org/component_ref: '{"digest": "926929bbd947080eaf6e896e27a4ff291e75f94cf75e60e83c06d3b5963417b9",
+          "url": "./evidently_monitoring.yaml"}'}
+  - name: first-pipeline
+    dag:
+      tasks:
+      - {name: download-data-function, template: download-data-function}
+      - name: evidently-monitoring
+        template: evidently-monitoring
+        dependencies: [xgboost-regressor]
+        arguments:
+          artifacts:
+          - {name: xgboost-regressor-Evidently_Data, from: '{{tasks.xgboost-regressor.outputs.artifacts.xgboost-regressor-Evidently_Data}}'}
+      - name: xgboost-regressor
+        template: xgboost-regressor
+        dependencies: [download-data-function]
+        arguments:
+          artifacts:
+          - {name: download-data-function-Data, from: '{{tasks.download-data-function.outputs.artifacts.download-data-function-Data}}'}
+  - name: xgboost-regressor
+    container:
+      args: []
+      command: [python, extremegboost.py, --data, /tmp/inputs/Data/data, --evidently_data,
+        /tmp/outputs/Evidently_Data/data]
+      image: docker.io/vermakartik/xgboost:v11
+    inputs:
+      artifacts:
+      - {name: download-data-function-Data, path: /tmp/inputs/Data/data}
+    outputs:
+      artifacts:
+      - {name: xgboost-regressor-Evidently_Data, path: /tmp/outputs/Evidently_Data/data}
+    metadata:
+      labels:
+        pipelines.kubeflow.org/kfp_sdk_version: 1.8.20
+        pipelines.kubeflow.org/pipeline-sdk-type: kfp
+        pipelines.kubeflow.org/enable_caching: "true"
+      annotations: {pipelines.kubeflow.org/component_spec: '{"description": "Trains
+          a  XGBoost regressor", "implementation": {"container": {"command": ["python",
+          "extremegboost.py", "--data", {"inputPath": "Data"}, "--evidently_data",
+          {"outputPath": "Evidently_Data"}], "image": "docker.io/vermakartik/xgboost:v11"}},
+          "inputs": [{"description": "Path where data is stored.", "name": "Data",
+          "type": "LocalPath"}], "name": "XGBoost regressor", "outputs": [{"description":
+          "Path where evidently data will be stored.", "name": "Evidently_Data", "type":
+          "LocalPath"}]}', pipelines.kubeflow.org/component_ref: '{"digest": "006842d5e287f2f0dc345aacde4e7fe444123f00b1428208665b8768a694c64a",
+          "url": "./extremegboost.yaml"}'}
+  arguments:
+    parameters: []
+  serviceAccountName: pipeline-runner
