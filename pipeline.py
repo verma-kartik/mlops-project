@@ -1,8 +1,7 @@
 import kfp
 from kfp import dsl
-from kfp.components import func_to_container_op
 
-@dsl.pipeline(name='First Pipeline', description='Applies Decision Tree and Logistic Regression for classification problem.')
+@dsl.pipeline(name='First Pipeline')
 def first_pipeline():
 
     # Loads the yaml manifest for each component

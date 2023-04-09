@@ -6,7 +6,7 @@ inputs:
 
 implementation:
   container:
-    image: docker.io/vermakartik/evi_monitoring:v1
+    image: docker.io/vermakartik/evi_monitoring:v12
     command: [
       python, evidently_monitoring.py,
       

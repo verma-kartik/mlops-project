@@ -1,5 +1,5 @@
 name: Download Data Function
-description: Download toy data from sklearn datasets
+description: Downloads, preprocess and splits the dataset.
 
 outputs:
 - {name: Data, type: LocalPath, description: 'Path where data will be stored.'}
