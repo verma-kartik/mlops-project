@@ -23,7 +23,7 @@ def _download_data(args):
            'bathrooms','view','sqft_basement','lat','long','waterfront',
            'yr_built', 'bedrooms']
     
-    //creating two datasets for evidently.ai API
+    #creating two datasets for evidently.ai API
     ref_data = df[:15000]
     prod_data = df[15000:]
 

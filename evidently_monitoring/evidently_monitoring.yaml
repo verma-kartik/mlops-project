@@ -11,6 +11,6 @@ implementation:
       python, evidently_monitoring.py,
       
       --evidently_data,
-      {intputPath: Evidently_Data}
+      {inputPath: Evidently_Data}
 
     ]
