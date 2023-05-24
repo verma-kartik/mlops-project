@@ -1,0 +1,435 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: dphi-
+  annotations: {pipelines.kubeflow.org/kfp_sdk_version: 1.6.3, pipelines.kubeflow.org/pipeline_compilation_time: '2023-05-24T14:35:08.194656',
+    pipelines.kubeflow.org/pipeline_spec: '{"description": "pipeline", "name": "dphi"}'}
+  labels: {pipelines.kubeflow.org/kfp_sdk_version: 1.6.3}
+spec:
+  entrypoint: dphi
+  templates:
+  - name: download-data
+    container:
+      args: [--output, /tmp/outputs/output/data]
+      command:
+      - sh
+      - -c
+      - (PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location
+        'pandas==1.5.3' 'numpy==1.24.2' 'scikit-learn==1.2.2' || PIP_DISABLE_PIP_VERSION_CHECK=1
+        python3 -m pip install --quiet --no-warn-script-location 'pandas==1.5.3' 'numpy==1.24.2'
+        'scikit-learn==1.2.2' --user) && "$0" "$@"
+      - sh
+      - -ec
+      - |
+        program_path=$(mktemp)
+        printf "%s" "$0" > "$program_path"
+        python3 -u "$program_path" "$@"
+      - "def _make_parent_dirs_and_return_path(file_path: str):\n    import os\n \
+        \   os.makedirs(os.path.dirname(file_path), exist_ok=True)\n    return file_path\n\
+        \ndef download_data(output_path):\n\n    import json\n    import argparse\n\
+        \    from pathlib import Path\n\n    import numpy as np\n    import pandas\
+        \ as pd\n\n    from sklearn.model_selection import train_test_split\n    from\
+        \ sklearn.preprocessing import OneHotEncoder\n\n    # Gets and split dataset\n\
+        \    url='https://drive.google.com/file/d/1e83nTKyy9UiiparbtiLMTbF1HC40lr0r/view?usp=share_link'\n\
+        \    url='https://drive.google.com/uc?id=' + url.split('/')[-2]\n    df =\
+        \ pd.read_csv(url)\n    df[['grade','view','waterfront']] = df[['grade','view','waterfront']].astype('object')\n\
+        \n    # Delete entry with 33 bedrooms\n    df = df[df[\"bedrooms\"] != 33]\n\
+        \n    features = ['sqft_living','grade', 'sqft_above', 'sqft_living15',\n\
+        \           'bathrooms','view','sqft_basement','lat','long','waterfront',\n\
+        \           'yr_built', 'bedrooms']\n\n    #creating two datasets for evidently.ai\
+        \ API\n    ref_data = df[:15000]\n    prod_data = df[15000:]\n\n    X_train,\
+        \ X_val, y_train, y_val = train_test_split(ref_data[features], ref_data['price'],\
+        \ test_size=0.2, shuffle=True, random_state=42)\n\n    categorical = ['grade',\
+        \ 'view', 'waterfront']\n    ohe = OneHotEncoder(handle_unknown = 'ignore')\n\
+        \    ohe = ohe.fit(X_train[categorical])\n\n    def preprocessing(X, y, ohe):\n\
+        \        # Convert grade, view, waterfront to type object\n        X[['grade','view','waterfront']]\
+        \ = X[['grade','view','waterfront']].astype('object')\n\n        # log transform\
+        \ the target varibale \n        y = np.log1p(y)\n\n        # define categorical\
+        \ and numerical varibales \n        categorical = ['grade', 'view', 'waterfront']\n\
+        \        numerical = ['sqft_living', 'sqft_above', 'sqft_living15',\n    \
+        \        'bathrooms','sqft_basement','lat','long','yr_built',\n          \
+        \  'bedrooms']\n\n        # one-hot encode categorical variables\n       \
+        \ X_cat = ohe.transform(X[categorical]).toarray()\n\n        # define numerical\
+        \ columns \n        X_num = np.array(X[numerical])\n\n        # concatenate\
+        \ numerical and categorical variables\n        X = np.concatenate([X_cat,\
+        \ X_num], axis=1)\n\n        print('Shape after one-hot encoding')\n     \
+        \   print(f'X shape: {X.shape}')\n\n        return X, y\n\n    X_train, y_train\
+        \ = preprocessing(X_train, y_train, ohe)\n    X_val, y_val = preprocessing(X_val,\
+        \ y_val, ohe)\n    X_prod, y_prod = preprocessing(prod_data[features], prod_data['price'],\
+        \ ohe)\n\n    X_train_full, y_train_full = preprocessing(ref_data[features],\
+        \ ref_data['price'], ohe)\n\n    ref_data_numpy = ref_data.to_numpy()\n  \
+        \  prod_data_numpy = prod_data.to_numpy()\n\n    # Creates `data` structure\
+        \ to save and \n    # share train, val and prod datasets.\n    data = {'x_train'\
+        \ : X_train.tolist(),\n            'y_train' : y_train.tolist(),\n       \
+        \     'x_train_full' : X_train_full.tolist(),\n            'y_train_full'\
+        \ : y_train_full.tolist(),\n            'x_val' : X_val.tolist(),\n      \
+        \      'y_val' : y_val.tolist(),\n            'x_prod' : X_prod.tolist(),\n\
+        \            'y_prod' : y_prod.tolist(),\n            'ref_data' : ref_data_numpy.tolist(),\n\
+        \            'prod_data' : prod_data_numpy.tolist()}\n\n    # Creates a json\
+        \ object based on `data`\n    data_json = json.dumps(data)\n\n    with open(output_path,\
+        \ \"w+\", encoding=\"utf-8\") as f:\n        json.dump(data_json, f)\n\nimport\
+        \ argparse\n_parser = argparse.ArgumentParser(prog='Download data', description='')\n\
+        _parser.add_argument(\"--output\", dest=\"output_path\", type=_make_parent_dirs_and_return_path,\
+        \ required=True, default=argparse.SUPPRESS)\n_parsed_args = vars(_parser.parse_args())\n\
+        \n_outputs = download_data(**_parsed_args)\n"
+      image: python:3.10.11
+    outputs:
+      artifacts:
+      - {name: download-data-output, path: /tmp/outputs/output/data}
+    metadata:
+      annotations: {pipelines.kubeflow.org/task_display_name: download data, pipelines.kubeflow.org/component_spec: '{"implementation":
+          {"container": {"args": ["--output", {"outputPath": "output"}], "command":
+          ["sh", "-c", "(PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet
+          --no-warn-script-location ''pandas==1.5.3'' ''numpy==1.24.2'' ''scikit-learn==1.2.2''
+          || PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location
+          ''pandas==1.5.3'' ''numpy==1.24.2'' ''scikit-learn==1.2.2'' --user) && \"$0\"
+          \"$@\"", "sh", "-ec", "program_path=$(mktemp)\nprintf \"%s\" \"$0\" > \"$program_path\"\npython3
+          -u \"$program_path\" \"$@\"\n", "def _make_parent_dirs_and_return_path(file_path:
+          str):\n    import os\n    os.makedirs(os.path.dirname(file_path), exist_ok=True)\n    return
+          file_path\n\ndef download_data(output_path):\n\n    import json\n    import
+          argparse\n    from pathlib import Path\n\n    import numpy as np\n    import
+          pandas as pd\n\n    from sklearn.model_selection import train_test_split\n    from
+          sklearn.preprocessing import OneHotEncoder\n\n    # Gets and split dataset\n    url=''https://drive.google.com/file/d/1e83nTKyy9UiiparbtiLMTbF1HC40lr0r/view?usp=share_link''\n    url=''https://drive.google.com/uc?id=''
+          + url.split(''/'')[-2]\n    df = pd.read_csv(url)\n    df[[''grade'',''view'',''waterfront'']]
+          = df[[''grade'',''view'',''waterfront'']].astype(''object'')\n\n    # Delete
+          entry with 33 bedrooms\n    df = df[df[\"bedrooms\"] != 33]\n\n    features
+          = [''sqft_living'',''grade'', ''sqft_above'', ''sqft_living15'',\n           ''bathrooms'',''view'',''sqft_basement'',''lat'',''long'',''waterfront'',\n           ''yr_built'',
+          ''bedrooms'']\n\n    #creating two datasets for evidently.ai API\n    ref_data
+          = df[:15000]\n    prod_data = df[15000:]\n\n    X_train, X_val, y_train,
+          y_val = train_test_split(ref_data[features], ref_data[''price''], test_size=0.2,
+          shuffle=True, random_state=42)\n\n    categorical = [''grade'', ''view'',
+          ''waterfront'']\n    ohe = OneHotEncoder(handle_unknown = ''ignore'')\n    ohe
+          = ohe.fit(X_train[categorical])\n\n    def preprocessing(X, y, ohe):\n        #
+          Convert grade, view, waterfront to type object\n        X[[''grade'',''view'',''waterfront'']]
+          = X[[''grade'',''view'',''waterfront'']].astype(''object'')\n\n        #
+          log transform the target varibale \n        y = np.log1p(y)\n\n        #
+          define categorical and numerical varibales \n        categorical = [''grade'',
+          ''view'', ''waterfront'']\n        numerical = [''sqft_living'', ''sqft_above'',
+          ''sqft_living15'',\n            ''bathrooms'',''sqft_basement'',''lat'',''long'',''yr_built'',\n            ''bedrooms'']\n\n        #
+          one-hot encode categorical variables\n        X_cat = ohe.transform(X[categorical]).toarray()\n\n        #
+          define numerical columns \n        X_num = np.array(X[numerical])\n\n        #
+          concatenate numerical and categorical variables\n        X = np.concatenate([X_cat,
+          X_num], axis=1)\n\n        print(''Shape after one-hot encoding'')\n        print(f''X
+          shape: {X.shape}'')\n\n        return X, y\n\n    X_train, y_train = preprocessing(X_train,
+          y_train, ohe)\n    X_val, y_val = preprocessing(X_val, y_val, ohe)\n    X_prod,
+          y_prod = preprocessing(prod_data[features], prod_data[''price''], ohe)\n\n    X_train_full,
+          y_train_full = preprocessing(ref_data[features], ref_data[''price''], ohe)\n\n    ref_data_numpy
+          = ref_data.to_numpy()\n    prod_data_numpy = prod_data.to_numpy()\n\n    #
+          Creates `data` structure to save and \n    # share train, val and prod datasets.\n    data
+          = {''x_train'' : X_train.tolist(),\n            ''y_train'' : y_train.tolist(),\n            ''x_train_full''
+          : X_train_full.tolist(),\n            ''y_train_full'' : y_train_full.tolist(),\n            ''x_val''
+          : X_val.tolist(),\n            ''y_val'' : y_val.tolist(),\n            ''x_prod''
+          : X_prod.tolist(),\n            ''y_prod'' : y_prod.tolist(),\n            ''ref_data''
+          : ref_data_numpy.tolist(),\n            ''prod_data'' : prod_data_numpy.tolist()}\n\n    #
+          Creates a json object based on `data`\n    data_json = json.dumps(data)\n\n    with
+          open(output_path, \"w+\", encoding=\"utf-8\") as f:\n        json.dump(data_json,
+          f)\n\nimport argparse\n_parser = argparse.ArgumentParser(prog=''Download
+          data'', description='''')\n_parser.add_argument(\"--output\", dest=\"output_path\",
+          type=_make_parent_dirs_and_return_path, required=True, default=argparse.SUPPRESS)\n_parsed_args
+          = vars(_parser.parse_args())\n\n_outputs = download_data(**_parsed_args)\n"],
+          "image": "python:3.10.11"}}, "name": "Download data", "outputs": [{"name":
+          "output", "type": "CSV"}]}', pipelines.kubeflow.org/component_ref: '{}'}
+      labels: {pipelines.kubeflow.org/kfp_sdk_version: 1.6.3, pipelines.kubeflow.org/pipeline-sdk-type: kfp}
+  - name: dphi
+    dag:
+      tasks:
+      - {name: download-data, template: download-data}
+      - name: evidently-monitoring
+        template: evidently-monitoring
+        dependencies: [process-data]
+        arguments:
+          artifacts:
+          - {name: process-data-output, from: '{{tasks.process-data.outputs.artifacts.process-data-output}}'}
+      - name: process-data
+        template: process-data
+        dependencies: [download-data]
+        arguments:
+          artifacts:
+          - {name: download-data-output, from: '{{tasks.download-data.outputs.artifacts.download-data-output}}'}
+  - name: evidently-monitoring
+    container:
+      args: [--intput, /tmp/inputs/intput/data, --mlpipeline-ui-metadata, /tmp/outputs/mlpipeline_ui_metadata/data]
+      command:
+      - sh
+      - -c
+      - (PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location
+        'pandas==1.5.3' 'evidently==0.2.8' || PIP_DISABLE_PIP_VERSION_CHECK=1 python3
+        -m pip install --quiet --no-warn-script-location 'pandas==1.5.3' 'evidently==0.2.8'
+        --user) && "$0" "$@"
+      - sh
+      - -ec
+      - |
+        program_path=$(mktemp)
+        printf "%s" "$0" > "$program_path"
+        python3 -u "$program_path" "$@"
+      - |
+        def _make_parent_dirs_and_return_path(file_path: str):
+            import os
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            return file_path
+
+        def evidently_monitoring(intput_path, mlpipeline_ui_metadata_path):
+
+            import json
+            import argparse
+            from pathlib import Path
+            from collections import namedtuple
+            import os
+
+            import pandas as pd
+
+            import evidently
+
+            from evidently.dashboard import Dashboard
+            from evidently.pipeline.column_mapping import ColumnMapping
+            # packages for interactive dashboards
+            from evidently.dashboard.tabs import DataDriftTab
+
+                # Open and reads file "data"
+            with open(intput_path) as data_file:
+                evidently_data = json.load(data_file)
+
+            evidently_data = json.loads(evidently_data)
+
+            ref_data = evidently_data['ref_data']
+            prod_data = evidently_data['prod_data']
+
+            column_names = ["id", "data", "price", "bedrooms", "bathrooms", "sqft_living", "sqft_lot", "floors", "waterfront", "view", "...", "grade", "sqft_above", "sqft_basement", "yr_built", "yr_renovated", "zipcode", "lat", "long", "sqft_living15", "sqft_lot15", "prediction", "price_log"]
+
+            ref_data = pd.DataFrame.from_records(ref_data)
+            ref_data.columns = column_names
+
+            prod_data = pd.DataFrame.from_records(prod_data)
+            prod_data.columns = column_names
+
+            # Define the data drift dashboard using the DataDriftTab.
+            column_mapping = ColumnMapping()
+            target = 'price_log'
+            numerical_features = ['sqft_living', 'sqft_above', 'sqft_living15',
+                    'bathrooms','sqft_basement','lat','long',
+                    'yr_built','bedrooms']
+            categorical_features = ['grade', 'view', 'waterfront']
+            column_mapping.target = target
+            column_mapping.prediction = 'prediction'
+            column_mapping.numerical_features = numerical_features
+            column_mapping.categorical_features = categorical_features
+
+            print(column_mapping)
+
+            data_drift_dashboard = Dashboard(tabs=[DataDriftTab(verbose_level=1)])
+            data_drift_dashboard.calculate(ref_data, prod_data, column_mapping=column_mapping)
+
+            data_drift_dashboard_filename = "data_drift.html"
+            local_dir = "/tmp/artifact_downloads"
+            if not os.path.exists(local_dir):
+                os.mkdir(local_dir)
+            static_html_path = os.path.join(local_dir, data_drift_dashboard_filename)
+            data_drift_dashboard.save(static_html_path)
+            with open(static_html_path, "r") as f:
+                inline_report = f.read()
+
+            metadata = {
+                "outputs": [
+                    {
+                        "storage": "inline",
+                        "source": inline_report,
+                        "type": "web-app",
+                    },
+                ]
+            }
+
+            from collections import namedtuple
+
+            with open(mlpipeline_ui_metadata_path, 'w') as metadata_file:
+                json.dump(metadata, metadata_file)
+
+        import argparse
+        _parser = argparse.ArgumentParser(prog='Evidently monitoring', description='')
+        _parser.add_argument("--intput", dest="intput_path", type=str, required=True, default=argparse.SUPPRESS)
+        _parser.add_argument("--mlpipeline-ui-metadata", dest="mlpipeline_ui_metadata_path", type=_make_parent_dirs_and_return_path, required=True, default=argparse.SUPPRESS)
+        _parsed_args = vars(_parser.parse_args())
+
+        _outputs = evidently_monitoring(**_parsed_args)
+      image: python:3.10.11
+    inputs:
+      artifacts:
+      - {name: process-data-output, path: /tmp/inputs/intput/data}
+    outputs:
+      artifacts:
+      - {name: mlpipeline-ui-metadata, path: /tmp/outputs/mlpipeline_ui_metadata/data}
+    metadata:
+      annotations: {pipelines.kubeflow.org/task_display_name: evidently monitoring,
+        pipelines.kubeflow.org/component_spec: '{"implementation": {"container": {"args":
+          ["--intput", {"inputPath": "intput"}, "--mlpipeline-ui-metadata", {"outputPath":
+          "mlpipeline_ui_metadata"}], "command": ["sh", "-c", "(PIP_DISABLE_PIP_VERSION_CHECK=1
+          python3 -m pip install --quiet --no-warn-script-location ''pandas==1.5.3''
+          ''evidently==0.2.8'' || PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install
+          --quiet --no-warn-script-location ''pandas==1.5.3'' ''evidently==0.2.8''
+          --user) && \"$0\" \"$@\"", "sh", "-ec", "program_path=$(mktemp)\nprintf
+          \"%s\" \"$0\" > \"$program_path\"\npython3 -u \"$program_path\" \"$@\"\n",
+          "def _make_parent_dirs_and_return_path(file_path: str):\n    import os\n    os.makedirs(os.path.dirname(file_path),
+          exist_ok=True)\n    return file_path\n\ndef evidently_monitoring(intput_path,
+          mlpipeline_ui_metadata_path):\n\n    import json\n    import argparse\n    from
+          pathlib import Path\n    from collections import namedtuple\n    import
+          os\n\n    import pandas as pd\n\n    import evidently\n\n    from evidently.dashboard
+          import Dashboard\n    from evidently.pipeline.column_mapping import ColumnMapping\n    #
+          packages for interactive dashboards\n    from evidently.dashboard.tabs import
+          DataDriftTab\n\n        # Open and reads file \"data\"\n    with open(intput_path)
+          as data_file:\n        evidently_data = json.load(data_file)\n\n    evidently_data
+          = json.loads(evidently_data)\n\n    ref_data = evidently_data[''ref_data'']\n    prod_data
+          = evidently_data[''prod_data'']\n\n    column_names = [\"id\", \"data\",
+          \"price\", \"bedrooms\", \"bathrooms\", \"sqft_living\", \"sqft_lot\", \"floors\",
+          \"waterfront\", \"view\", \"...\", \"grade\", \"sqft_above\", \"sqft_basement\",
+          \"yr_built\", \"yr_renovated\", \"zipcode\", \"lat\", \"long\", \"sqft_living15\",
+          \"sqft_lot15\", \"prediction\", \"price_log\"]\n\n    ref_data = pd.DataFrame.from_records(ref_data)\n    ref_data.columns
+          = column_names\n\n    prod_data = pd.DataFrame.from_records(prod_data)\n    prod_data.columns
+          = column_names\n\n    # Define the data drift dashboard using the DataDriftTab.\n    column_mapping
+          = ColumnMapping()\n    target = ''price_log''\n    numerical_features =
+          [''sqft_living'', ''sqft_above'', ''sqft_living15'',\n            ''bathrooms'',''sqft_basement'',''lat'',''long'',\n            ''yr_built'',''bedrooms'']\n    categorical_features
+          = [''grade'', ''view'', ''waterfront'']\n    column_mapping.target = target\n    column_mapping.prediction
+          = ''prediction''\n    column_mapping.numerical_features = numerical_features\n    column_mapping.categorical_features
+          = categorical_features\n\n    print(column_mapping)\n\n    data_drift_dashboard
+          = Dashboard(tabs=[DataDriftTab(verbose_level=1)])\n    data_drift_dashboard.calculate(ref_data,
+          prod_data, column_mapping=column_mapping)\n\n    data_drift_dashboard_filename
+          = \"data_drift.html\"\n    local_dir = \"/tmp/artifact_downloads\"\n    if
+          not os.path.exists(local_dir):\n        os.mkdir(local_dir)\n    static_html_path
+          = os.path.join(local_dir, data_drift_dashboard_filename)\n    data_drift_dashboard.save(static_html_path)\n    with
+          open(static_html_path, \"r\") as f:\n        inline_report = f.read()\n\n    metadata
+          = {\n        \"outputs\": [\n            {\n                \"storage\":
+          \"inline\",\n                \"source\": inline_report,\n                \"type\":
+          \"web-app\",\n            },\n        ]\n    }\n\n    from collections import
+          namedtuple\n\n    with open(mlpipeline_ui_metadata_path, ''w'') as metadata_file:\n        json.dump(metadata,
+          metadata_file)\n\nimport argparse\n_parser = argparse.ArgumentParser(prog=''Evidently
+          monitoring'', description='''')\n_parser.add_argument(\"--intput\", dest=\"intput_path\",
+          type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--mlpipeline-ui-metadata\",
+          dest=\"mlpipeline_ui_metadata_path\", type=_make_parent_dirs_and_return_path,
+          required=True, default=argparse.SUPPRESS)\n_parsed_args = vars(_parser.parse_args())\n\n_outputs
+          = evidently_monitoring(**_parsed_args)\n"], "image": "python:3.10.11"}},
+          "inputs": [{"name": "intput"}], "name": "Evidently monitoring", "outputs":
+          [{"name": "mlpipeline_ui_metadata", "type": "String"}]}', pipelines.kubeflow.org/component_ref: '{}'}
+      labels: {pipelines.kubeflow.org/kfp_sdk_version: 1.6.3, pipelines.kubeflow.org/pipeline-sdk-type: kfp}
+  - name: process-data
+    container:
+      args: [--input, /tmp/inputs/input/data, --output, /tmp/outputs/output/data]
+      command:
+      - sh
+      - -c
+      - (PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location
+        'pandas==1.5.3' 'numpy==1.24.2' 'scikit-learn==1.2.2' 'xgboost==1.7.5' ||
+        PIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location
+        'pandas==1.5.3' 'numpy==1.24.2' 'scikit-learn==1.2.2' 'xgboost==1.7.5' --user)
+        && "$0" "$@"
+      - sh
+      - -ec
+      - |
+        program_path=$(mktemp)
+        printf "%s" "$0" > "$program_path"
+        python3 -u "$program_path" "$@"
+      - "def _make_parent_dirs_and_return_path(file_path: str):\n    import os\n \
+        \   os.makedirs(os.path.dirname(file_path), exist_ok=True)\n    return file_path\n\
+        \ndef process_data(input_path, output_path):\n    import json\n    import\
+        \ argparse\n    from pathlib import Path\n\n    import xgboost as xgb\n  \
+        \  import numpy as np\n    import pandas as pd\n\n    from sklearn.metrics\
+        \ import mean_squared_error\n    from sklearn.metrics import accuracy_score\n\
+        \n    # Open and reads file \"data\"\n    with open(input_path) as f:\n  \
+        \      data = json.load(f)\n\n    # The excted data type is 'dict', however\
+        \ since the file\n    # was loaded as a json object, it is first loaded as\
+        \ a string\n    # thus we need to load again from such string in order to\
+        \ get \n    # the dict-type object.\n    data = json.loads(data)\n\n    x_train\
+        \ = data['x_train']\n    y_train = data['y_train']\n    x_val = data['x_val']\n\
+        \    y_val = data['y_val']\n\n    # Initialize XGB with objective function\n\
+        \    parameters = {\"objective\": 'reg:squarederror',\n                \"\
+        n_estimators\": 100,\n                \"verbosity\": 0}\n\n    model = xgb.XGBRegressor(**parameters)\n\
+        \    model.fit(x_train, y_train)\n\n    # generate predictions\n    y_pred_train\
+        \ = model.predict(x_train).reshape(-1,1)\n    y_pred = model.predict(x_val).reshape(-1,1)\n\
+        \n    # calculate errors\n    rmse_train = mean_squared_error(y_pred_train,\
+        \ y_train, squared=False)\n    rmse_val = mean_squared_error(y_pred, y_val,\
+        \ squared=False)\n    print(f\"rmse training: {rmse_train:.3f}\\t rmse validation:\
+        \ {rmse_val:.3f}\")\n\n    #Extracting ref and prod from 'data'\n    ref_data\
+        \ = data['ref_data']\n    prod_data = data['prod_data']\n    X_train_full\
+        \ = data['x_train_full']\n    X_prod = data['x_prod']\n\n    column_names\
+        \ = [\"id\", \"data\", \"price\", \"bedrooms\", \"bathrooms\", \"sqft_living\"\
+        , \"sqft_lot\", \"floors\", \"waterfront\", \"view\", \"...\", \"grade\",\
+        \ \"sqft_above\", \"sqft_basement\", \"yr_built\", \"yr_renovated\", \"zipcode\"\
+        , \"lat\", \"long\", \"sqft_living15\", \"sqft_lot15\"]\n\n    #ref_data and\
+        \ prod_data was stored as numpy.darray, therefore, converting back to pandas\
+        \ DataFrame.\n    ref_data = pd.DataFrame.from_records(ref_data)\n    ref_data.columns\
+        \ = column_names\n\n    prod_data = pd.DataFrame.from_records(prod_data)\n\
+        \    prod_data.columns = column_names\n\n    ref_data['prediction'] = model.predict(X_train_full)\n\
+        \    prod_data['prediction'] = model.predict(X_prod)\n    ref_data['price_log']\
+        \ = np.log1p(ref_data['price'])\n    prod_data['price_log'] = np.log1p(prod_data['price'])\n\
+        \n    ref_data_final_numpy = ref_data.to_numpy()\n    prod_data_final_numpy\
+        \ = prod_data.to_numpy()\n\n    evidently_data = {\n        'ref_data' : ref_data_final_numpy.tolist(),\n\
+        \        'prod_data' : prod_data_final_numpy.tolist()\n    }\n\n    # Creates\
+        \ a json object based on `evidently_data`\n    evidently_data_json = json.dumps(evidently_data)\n\
+        \n    with open(output_path, \"w+\", encoding=\"utf-8\") as f:\n        json.dump(evidently_data_json,\
+        \ f)\n\nimport argparse\n_parser = argparse.ArgumentParser(prog='Process data',\
+        \ description='')\n_parser.add_argument(\"--input\", dest=\"input_path\",\
+        \ type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"\
+        --output\", dest=\"output_path\", type=_make_parent_dirs_and_return_path,\
+        \ required=True, default=argparse.SUPPRESS)\n_parsed_args = vars(_parser.parse_args())\n\
+        \n_outputs = process_data(**_parsed_args)\n"
+      image: python:3.10.11
+    inputs:
+      artifacts:
+      - {name: download-data-output, path: /tmp/inputs/input/data}
+    outputs:
+      artifacts:
+      - {name: process-data-output, path: /tmp/outputs/output/data}
+    metadata:
+      annotations: {pipelines.kubeflow.org/task_display_name: extreme_gboost, pipelines.kubeflow.org/component_spec: '{"implementation":
+          {"container": {"args": ["--input", {"inputPath": "input"}, "--output", {"outputPath":
+          "output"}], "command": ["sh", "-c", "(PIP_DISABLE_PIP_VERSION_CHECK=1 python3
+          -m pip install --quiet --no-warn-script-location ''pandas==1.5.3'' ''numpy==1.24.2''
+          ''scikit-learn==1.2.2'' ''xgboost==1.7.5'' || PIP_DISABLE_PIP_VERSION_CHECK=1
+          python3 -m pip install --quiet --no-warn-script-location ''pandas==1.5.3''
+          ''numpy==1.24.2'' ''scikit-learn==1.2.2'' ''xgboost==1.7.5'' --user) &&
+          \"$0\" \"$@\"", "sh", "-ec", "program_path=$(mktemp)\nprintf \"%s\" \"$0\"
+          > \"$program_path\"\npython3 -u \"$program_path\" \"$@\"\n", "def _make_parent_dirs_and_return_path(file_path:
+          str):\n    import os\n    os.makedirs(os.path.dirname(file_path), exist_ok=True)\n    return
+          file_path\n\ndef process_data(input_path, output_path):\n    import json\n    import
+          argparse\n    from pathlib import Path\n\n    import xgboost as xgb\n    import
+          numpy as np\n    import pandas as pd\n\n    from sklearn.metrics import
+          mean_squared_error\n    from sklearn.metrics import accuracy_score\n\n    #
+          Open and reads file \"data\"\n    with open(input_path) as f:\n        data
+          = json.load(f)\n\n    # The excted data type is ''dict'', however since
+          the file\n    # was loaded as a json object, it is first loaded as a string\n    #
+          thus we need to load again from such string in order to get \n    # the
+          dict-type object.\n    data = json.loads(data)\n\n    x_train = data[''x_train'']\n    y_train
+          = data[''y_train'']\n    x_val = data[''x_val'']\n    y_val = data[''y_val'']\n\n    #
+          Initialize XGB with objective function\n    parameters = {\"objective\":
+          ''reg:squarederror'',\n                \"n_estimators\": 100,\n                \"verbosity\":
+          0}\n\n    model = xgb.XGBRegressor(**parameters)\n    model.fit(x_train,
+          y_train)\n\n    # generate predictions\n    y_pred_train = model.predict(x_train).reshape(-1,1)\n    y_pred
+          = model.predict(x_val).reshape(-1,1)\n\n    # calculate errors\n    rmse_train
+          = mean_squared_error(y_pred_train, y_train, squared=False)\n    rmse_val
+          = mean_squared_error(y_pred, y_val, squared=False)\n    print(f\"rmse training:
+          {rmse_train:.3f}\\t rmse validation: {rmse_val:.3f}\")\n\n    #Extracting
+          ref and prod from ''data''\n    ref_data = data[''ref_data'']\n    prod_data
+          = data[''prod_data'']\n    X_train_full = data[''x_train_full'']\n    X_prod
+          = data[''x_prod'']\n\n    column_names = [\"id\", \"data\", \"price\", \"bedrooms\",
+          \"bathrooms\", \"sqft_living\", \"sqft_lot\", \"floors\", \"waterfront\",
+          \"view\", \"...\", \"grade\", \"sqft_above\", \"sqft_basement\", \"yr_built\",
+          \"yr_renovated\", \"zipcode\", \"lat\", \"long\", \"sqft_living15\", \"sqft_lot15\"]\n\n    #ref_data
+          and prod_data was stored as numpy.darray, therefore, converting back to
+          pandas DataFrame.\n    ref_data = pd.DataFrame.from_records(ref_data)\n    ref_data.columns
+          = column_names\n\n    prod_data = pd.DataFrame.from_records(prod_data)\n    prod_data.columns
+          = column_names\n\n    ref_data[''prediction''] = model.predict(X_train_full)\n    prod_data[''prediction'']
+          = model.predict(X_prod)\n    ref_data[''price_log''] = np.log1p(ref_data[''price''])\n    prod_data[''price_log'']
+          = np.log1p(prod_data[''price''])\n\n    ref_data_final_numpy = ref_data.to_numpy()\n    prod_data_final_numpy
+          = prod_data.to_numpy()\n\n    evidently_data = {\n        ''ref_data'' :
+          ref_data_final_numpy.tolist(),\n        ''prod_data'' : prod_data_final_numpy.tolist()\n    }\n\n    #
+          Creates a json object based on `evidently_data`\n    evidently_data_json
+          = json.dumps(evidently_data)\n\n    with open(output_path, \"w+\", encoding=\"utf-8\")
+          as f:\n        json.dump(evidently_data_json, f)\n\nimport argparse\n_parser
+          = argparse.ArgumentParser(prog=''Process data'', description='''')\n_parser.add_argument(\"--input\",
+          dest=\"input_path\", type=str, required=True, default=argparse.SUPPRESS)\n_parser.add_argument(\"--output\",
+          dest=\"output_path\", type=_make_parent_dirs_and_return_path, required=True,
+          default=argparse.SUPPRESS)\n_parsed_args = vars(_parser.parse_args())\n\n_outputs
+          = process_data(**_parsed_args)\n"], "image": "python:3.10.11"}}, "inputs":
+          [{"name": "input", "type": "CSV"}], "name": "Process data", "outputs": [{"name":
+          "output", "type": "CSV"}]}', pipelines.kubeflow.org/component_ref: '{}'}
+      labels: {pipelines.kubeflow.org/kfp_sdk_version: 1.6.3, pipelines.kubeflow.org/pipeline-sdk-type: kfp}
+  arguments:
+    parameters: []
+  serviceAccountName: pipeline-runner
