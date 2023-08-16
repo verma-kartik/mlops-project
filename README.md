@@ -1,4 +1,4 @@
-﻿# Dphi-MLOps-Assignment
+﻿# MLOps-Project
  
  ## Project Title: Implementing Kubeflow with Evidently.ai for Model Monitoring
  
